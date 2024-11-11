@@ -1,0 +1,1641 @@
+import pandas as pd
+import numpy as np
+from scipy.stats import poisson, lognorm, norm
+
+# Load the dataset
+df = pd.read_csv("operational_risk_dataset.csv")
+
+# Extract the year from the Date column
+df['Year'] = pd.to_datetime(df['Date']).dt.year
+
+# Define a function to calculate frequency, severity, and VaR using LDA
+def calculate_lda_metrics(group):
+    # Frequency modeling with Poisson distribution
+    event_count = group.shape[0]
+    frequency_rate = event_count  # Assume frequency is based on the count of events
+    
+    # Severity modeling with Log-Normal distribution for Net Loss Amount
+    losses = group["Net Loss Amount"]
+    mean_log = np.log(losses[losses > 0]).mean()  # Mean of log of losses
+    std_log = np.log(losses[losses > 0]).std()    # Std dev of log of losses
+    
+    # Estimate 99% VaR for severity
+
+    
+    VaR_severity = lognorm.ppf(0.99, s=std_log, scale=np.exp(mean_log))
+    
+    # Estimate aggregate 99% VaR using frequency and severity (approximation)
+    aggregate_VaR = frequency_rate * VaR_severity
+    
+    return pd.Series({
+        "Event Count": event_count,
+        "Frequency Rate (per year)": frequency_rate,
+        "Mean Severity": losses.mean(),
+        "99% VaR Severity": VaR_severity,
+        "Aggregate 99% VaR": aggregate_VaR
+    })
+
+# Group by Year, Business Line, and Event Type, and apply LDA metrics function
+lda_results = df.groupby(["Year", "Business Line", "Event Type"]).apply(calculate_lda_metrics).reset_index()
+
+# Display the results
+print(lda_results.head())
+
+# Optionally, save the results to a CSV
+lda_results.to_csv("lda_yearwise_businessline_eventtype_analysis.csv", index=False)
+   Year      Business Line       Event Type  Event Count  \
+0  2020  Corporate Banking       Compliance         44.0   
+1  2020  Corporate Banking            Fraud         43.0   
+2  2020  Corporate Banking  Physical Damage         25.0   
+3  2020  Corporate Banking   System Failure         40.0   
+4  2020          Insurance       Compliance         51.0   
+
+   Frequency Rate (per year)  Mean Severity  99% VaR Severity  \
+0                       44.0   26782.742273     154123.170082   
+1                       43.0   24288.382093      94871.151303   
+2                       25.0   28808.867600     150654.713048   
+3                       40.0   26084.449500     137987.813276   
+4                       51.0   26577.084510     166609.029365   
+
+   Aggregate 99% VaR  
+0       6.781419e+06  
+1       4.079460e+06  
+2       3.766368e+06  
+3       5.519513e+06  
+4       8.497060e+06  
+C:\Users\Himanshu Singh\AppData\Local\Temp\ipykernel_39340\2972691667.py:37: DeprecationWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  lda_results = df.groupby(["Year", "Business Line", "Event Type"]).apply(calculate_lda_metrics).reset_index()
+df
+Date	Event ID	Event Type	Business Line	Event Description	Net Loss Amount	Year
+0	2021-11-25 12:51:38.023694	EVT00001	Compliance	Wealth Management	Compliance event in Wealth Management. Issue r...	18970.12	2021
+1	2023-01-27 12:51:38.023694	EVT00002	Fraud	Corporate Banking	Fraud event in Corporate Banking. Issue resolv...	16703.61	2023
+2	2021-04-18 12:51:38.023694	EVT00003	System Failure	Retail Banking	System Failure event in Retail Banking. Issue ...	2651.15	2021
+3	2024-03-16 12:51:38.023694	EVT00004	System Failure	Wealth Management	System Failure event in Wealth Management. Iss...	5375.81	2024
+4	2023-06-09 12:51:38.023694	EVT00005	Compliance	Insurance	Compliance event in Insurance. Issue resolved ...	23009.76	2023
+...	...	...	...	...	...	...	...
+15995	2024-06-24 12:51:38.023694	EVT15996	Fraud	Retail Banking	Fraud event in Retail Banking. Issue resolved ...	18636.72	2024
+15996	2022-03-07 12:51:38.023694	EVT15997	Fraud	Wealth Management	Fraud event in Wealth Management. Issue resolv...	13052.73	2022
+15997	2022-11-10 12:51:38.023694	EVT15998	Fraud	Wealth Management	Fraud event in Wealth Management. Issue resolv...	21431.27	2022
+15998	2021-04-13 12:51:38.023694	EVT15999	Fraud	Wealth Management	Fraud event in Wealth Management. Issue resolv...	49975.51	2021
+15999	2023-12-04 12:51:38.023694	EVT16000	Physical Damage	Retail Banking	Physical Damage event in Retail Banking. Issue...	16277.13	2023
+16000 rows × 7 columns
+
+import pandas as pd
+import numpy as np
+import scipy.stats as stats
+
+# Load the data
+df = pd.read_csv("operational_risk_dataset_expanded.csv")
+
+# Convert Date to datetime if necessary
+df['Date'] = pd.to_datetime(df['Date'])
+
+# Extract Year from Date
+df['Year'] = df['Date'].dt.year
+
+# Group by Year, Business Line, and Event Type
+grouped = df.groupby(['Year', 'Business Line', 'Event Type'])
+
+# Initialize an empty list to store results
+results = []
+
+# Function to calculate VaR for Net Loss
+def calculate_var_net_loss(group):
+    mean = group["Net Loss Amount"].mean()
+    std_dev = group["Net Loss Amount"].std()
+    z_99 = stats.norm.ppf(0.99)
+    VaR = mean + z_99 * std_dev
+    return VaR, std_dev
+
+# Function to calculate Var for Event Counts
+def calculate_var_event_counts(group):
+    event_count = group['Event Type'].count()
+    mean_event_count = event_count
+    var_event_count = event_count - mean_event_count
+    return mean_event_count, var_event_count
+
+# Loop through each group and calculate the metrics
+for (year, business_line, event_type), group in grouped:
+    # Event Count
+    event_count = group['Event Type'].count()
+    
+    # Total Net Loss
+    total_net_loss = group['Net Loss Amount'].sum()
+    
+    # VaR for Net Loss
+    VaR_net_loss, std_net_loss = calculate_var_net_loss(group)
+    
+    # Variance of Event Counts
+    mean_event_count, var_event_count = calculate_var_event_counts(group)
+    
+    # Calculate the percentages of variance
+    var_net_loss_percentage = (std_net_loss ** 2) / (group["Net Loss Amount"].mean() ** 2) * 100
+    var_event_count_percentage = (var_event_count / mean_event_count) * 100 if mean_event_count != 0 else 0
+
+    # Append the results as a dictionary to the results list
+    results.append({
+        'Year': year,
+        'Business Line': business_line,
+        'Event Type': event_type,
+        'Event Count': event_count,
+        'Total Net Loss': total_net_loss,
+        'VaR Net Loss': VaR_net_loss,
+        'VaR Event Counts': mean_event_count,
+        'Var Net Loss': std_net_loss ** 2,
+        'Var Event Counts': var_event_count,
+        'Var Net Loss Percentage': var_net_loss_percentage,
+        'Var Event Counts Percentage': var_event_count_percentage
+    })
+
+# Convert the results list to a DataFrame
+result_df = pd.DataFrame(results)
+
+# Display the result
+print(result_df)
+     Year       Business Line           Event Type  Event Count  \
+0    2020  Corporate-Banking!          Compliance#            4   
+1    2020  Corporate-Banking!          Data&Breach           13   
+2    2020  Corporate-Banking!               Fraud$           16   
+3    2020  Corporate-Banking!        Payment@Error            6   
+4    2020  Corporate-Banking!      Physical*Damage            9   
+..    ...                 ...                  ...          ...   
+355  2024   Wealth*Management      Physical*Damage           41   
+356  2024   Wealth*Management      Security#Breach           46   
+357  2024   Wealth*Management      System-Failure@           61   
+358  2024   Wealth*Management   Transaction-Fraud!           41   
+359  2024   Wealth*Management  Unauthorized*Access           42   
+
+     Total Net Loss  VaR Net Loss  VaR Event Counts  Var Net Loss  \
+0          69861.85  48341.937959                 4  1.761595e+08   
+1         235238.22  47850.883309                13  1.636022e+08   
+2         423096.67  64975.203107                16  2.743381e+08   
+3         154534.49  64028.387949                 6  2.706621e+08   
+4         207959.46  64907.547365                 9  3.228664e+08   
+..              ...           ...               ...           ...   
+355       631856.56  60587.502122                41  3.771145e+08   
+356      1068101.20  66785.073483                46  3.507000e+08   
+357      1738542.60  60915.750498                61  1.941530e+08   
+358       888346.31  58649.026421                41  2.527159e+08   
+359      1035616.23  61722.374321                42  2.538488e+08   
+
+     Var Event Counts  Var Net Loss Percentage  Var Event Counts Percentage  
+0                   0                57.749196                          0.0  
+1                   0                49.964332                          0.0  
+2                   0                39.232583                          0.0  
+3                   0                40.801786                          0.0  
+4                   0                60.471460                          0.0  
+..                ...                      ...                          ...  
+355                 0               158.782997                          0.0  
+356                 0                65.046898                          0.0  
+357                 0                23.901939                          0.0  
+358                 0                53.831390                          0.0  
+359                 0                41.751871                          0.0  
+
+[360 rows x 11 columns]
+result_df
+Year	Business Line	Event Type	Event Count	Total Net Loss	VaR Net Loss	VaR Event Counts	Var Net Loss	Var Event Counts	Var Net Loss Percentage	Var Event Counts Percentage
+0	2020	Corporate-Banking!	Compliance#	4	69861.85	48341.937959	4	1.761595e+08	0	57.749196	0.0
+1	2020	Corporate-Banking!	Data&Breach	13	235238.22	47850.883309	13	1.636022e+08	0	49.964332	0.0
+2	2020	Corporate-Banking!	Fraud$	16	423096.67	64975.203107	16	2.743381e+08	0	39.232583	0.0
+3	2020	Corporate-Banking!	Payment@Error	6	154534.49	64028.387949	6	2.706621e+08	0	40.801786	0.0
+4	2020	Corporate-Banking!	Physical*Damage	9	207959.46	64907.547365	9	3.228664e+08	0	60.471460	0.0
+...	...	...	...	...	...	...	...	...	...	...	...
+355	2024	Wealth*Management	Physical*Damage	41	631856.56	60587.502122	41	3.771145e+08	0	158.782997	0.0
+356	2024	Wealth*Management	Security#Breach	46	1068101.20	66785.073483	46	3.507000e+08	0	65.046898	0.0
+357	2024	Wealth*Management	System-Failure@	61	1738542.60	60915.750498	61	1.941530e+08	0	23.901939	0.0
+358	2024	Wealth*Management	Transaction-Fraud!	41	888346.31	58649.026421	41	2.527159e+08	0	53.831390	0.0
+359	2024	Wealth*Management	Unauthorized*Access	42	1035616.23	61722.374321	42	2.538488e+08	0	41.751871	0.0
+360 rows × 11 columns
+
+import pandas as pd
+import numpy as np
+import scipy.stats as stats
+
+# Load the data
+df = pd.read_csv("operational_risk_dataset_expanded.csv")
+
+# Convert Date to datetime if necessary
+df['Date'] = pd.to_datetime(df['Date'])
+
+# Extract Year from Date
+df['Year'] = df['Date'].dt.year
+
+# Group by Year, Business Line, and Event Type
+grouped = df.groupby(['Year', 'Business Line', 'Event Type'])
+
+# Initialize an empty list to store results
+results = []
+
+# Function to calculate VaR for Net Loss
+def calculate_var_net_loss(group):
+    mean = group["Net Loss Amount"].mean()
+    std_dev = group["Net Loss Amount"].std()
+    z_99 = stats.norm.ppf(0.99)
+    VaR = mean + z_99 * std_dev
+    return VaR, std_dev
+
+# Function to calculate VaR for Event Counts
+def calculate_var_event_counts(group):
+    event_count = group['Event Type'].count()
+    mean_event_count = event_count
+    var_event_count = event_count - mean_event_count
+    return mean_event_count, var_event_count
+
+# Loop through each group and calculate the metrics
+for (year, business_line, event_type), group in grouped:
+    # Event Count
+    event_count = group['Event Type'].count()
+    
+    # Total Net Loss
+    total_net_loss = group['Net Loss Amount'].sum()
+    
+    # VaR for Net Loss
+    VaR_net_loss, std_net_loss = calculate_var_net_loss(group)
+    
+    # VaR for Event Counts (Event Count itself, used for calculation)
+    VaR_event_count, _ = calculate_var_event_counts(group)
+    
+    # Calculate the percentages of variance
+    var_net_loss_percentage = (VaR_net_loss / total_net_loss) * 100 if total_net_loss != 0 else 0
+    var_event_count_percentage = (VaR_event_count / event_count) * 100 if event_count != 0 else 0
+
+    # Append the results as a dictionary to the results list
+    results.append({
+        'Year': year,
+        'Business Line': business_line,
+        'Event Type': event_type,
+        'Event Count': event_count,
+        'Total Net Loss': total_net_loss,
+        'VaR Net Loss': VaR_net_loss,
+        'VaR Event Counts': VaR_event_count,
+        'Var Net Loss': std_net_loss ** 2,
+        'Var Event Counts': var_event_count,
+        'Var Net Loss Percentage': var_net_loss_percentage,
+        'Var Event Counts Percentage': var_event_count_percentage
+    })
+
+# Convert the results list to a DataFrame
+result_df = pd.DataFrame(results)
+
+# Display the result
+print(result_df)
+     Year       Business Line           Event Type  Event Count  \
+0    2020  Corporate-Banking!          Compliance#            4   
+1    2020  Corporate-Banking!          Data&Breach           13   
+2    2020  Corporate-Banking!               Fraud$           16   
+3    2020  Corporate-Banking!        Payment@Error            6   
+4    2020  Corporate-Banking!      Physical*Damage            9   
+..    ...                 ...                  ...          ...   
+355  2024   Wealth*Management      Physical*Damage           41   
+356  2024   Wealth*Management      Security#Breach           46   
+357  2024   Wealth*Management      System-Failure@           61   
+358  2024   Wealth*Management   Transaction-Fraud!           41   
+359  2024   Wealth*Management  Unauthorized*Access           42   
+
+     Total Net Loss  VaR Net Loss  VaR Event Counts  Var Net Loss  \
+0          69861.85  48341.937959                 4  1.761595e+08   
+1         235238.22  47850.883309                13  1.636022e+08   
+2         423096.67  64975.203107                16  2.743381e+08   
+3         154534.49  64028.387949                 6  2.706621e+08   
+4         207959.46  64907.547365                 9  3.228664e+08   
+..              ...           ...               ...           ...   
+355       631856.56  60587.502122                41  3.771145e+08   
+356      1068101.20  66785.073483                46  3.507000e+08   
+357      1738542.60  60915.750498                61  1.941530e+08   
+358       888346.31  58649.026421                41  2.527159e+08   
+359      1035616.23  61722.374321                42  2.538488e+08   
+
+     Var Event Counts  Var Net Loss Percentage  Var Event Counts Percentage  
+0                   0                69.196476                        100.0  
+1                   0                20.341458                        100.0  
+2                   0                15.357058                        100.0  
+3                   0                41.433073                        100.0  
+4                   0                31.211635                        100.0  
+..                ...                      ...                          ...  
+355                 0                 9.588806                        100.0  
+356                 0                 6.252692                        100.0  
+357                 0                 3.503840                        100.0  
+358                 0                 6.602045                        100.0  
+359                 0                 5.959966                        100.0  
+
+[360 rows x 11 columns]
+result_df
+Year	Business Line	Event Type	Event Count	Total Net Loss	VaR Net Loss	VaR Event Counts	Var Net Loss	Var Event Counts	Var Net Loss Percentage	Var Event Counts Percentage
+0	2020	Corporate-Banking!	Compliance#	4	69861.85	48341.937959	4	1.761595e+08	0	69.196476	100.0
+1	2020	Corporate-Banking!	Data&Breach	13	235238.22	47850.883309	13	1.636022e+08	0	20.341458	100.0
+2	2020	Corporate-Banking!	Fraud$	16	423096.67	64975.203107	16	2.743381e+08	0	15.357058	100.0
+3	2020	Corporate-Banking!	Payment@Error	6	154534.49	64028.387949	6	2.706621e+08	0	41.433073	100.0
+4	2020	Corporate-Banking!	Physical*Damage	9	207959.46	64907.547365	9	3.228664e+08	0	31.211635	100.0
+...	...	...	...	...	...	...	...	...	...	...	...
+355	2024	Wealth*Management	Physical*Damage	41	631856.56	60587.502122	41	3.771145e+08	0	9.588806	100.0
+356	2024	Wealth*Management	Security#Breach	46	1068101.20	66785.073483	46	3.507000e+08	0	6.252692	100.0
+357	2024	Wealth*Management	System-Failure@	61	1738542.60	60915.750498	61	1.941530e+08	0	3.503840	100.0
+358	2024	Wealth*Management	Transaction-Fraud!	41	888346.31	58649.026421	41	2.527159e+08	0	6.602045	100.0
+359	2024	Wealth*Management	Unauthorized*Access	42	1035616.23	61722.374321	42	2.538488e+08	0	5.959966	100.0
+360 rows × 11 columns
+
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.tsa.arima.model import ARIMA
+import matplotlib.pyplot as plt
+
+# Load your data
+df = pd.read_csv("operational_risk_dataset_expanded.csv")
+df['Date'] = pd.to_datetime(df['Date'])
+df['Year'] = df['Date'].dt.year
+
+# Group the data by Year, Business Line, Event Type
+grouped = df.groupby(['Year', 'Business Line', 'Event Type'])
+
+# Initialize the results list
+forecast_results = []
+
+# Function to calculate VaR
+def calculate_var(predicted_mean, predicted_std):
+    z_99 = stats.norm.ppf(0.99)  # Z-score for 99% confidence
+    return predicted_mean + z_99 * predicted_std
+
+# Forecast VaR for Net Loss and Event Count for each category
+for (year, business_line, event_type), group in grouped:
+    # Forecast for Net Loss using ARIMA
+    net_loss_series = group['Net Loss Amount'].groupby(group['Year']).sum()  # Summing Net Loss for each year
+    event_count_series = group['Event Type'].groupby(group['Year']).count()  # Counting Events for each year
+    
+    # ARIMA model for Net Loss
+    model_net_loss = ARIMA(net_loss_series, order=(5, 1, 0))  # Example: (p=5, d=1, q=0) 
+    model_net_loss_fit = model_net_loss.fit()
+    
+    # Forecasting the next 1-3 years (adjust forecast steps as needed)
+    forecast_net_loss = model_net_loss_fit.get_forecast(steps=3)
+    forecast_net_loss_mean = forecast_net_loss.predicted_mean
+    forecast_net_loss_std = forecast_net_loss.se_mean  # Standard deviation for forecast
+    
+    # ARIMA model for Event Count
+    model_event_count = ARIMA(event_count_series, order=(5, 1, 0))  # Example: (p=5, d=1, q=0)
+    model_event_count_fit = model_event_count.fit()
+    
+    # Forecasting the next 1-3 years (adjust forecast steps as needed)
+    forecast_event_count = model_event_count_fit.get_forecast(steps=3)
+    forecast_event_count_mean = forecast_event_count.predicted_mean
+    forecast_event_count_std = forecast_event_count.se_mean  # Standard deviation for forecast
+
+    # Calculate VaR for the forecasted values
+    var_net_loss_forecast = [calculate_var(mean, std) for mean, std in zip(forecast_net_loss_mean, forecast_net_loss_std)]
+    var_event_count_forecast = [calculate_var(mean, std) for mean, std in zip(forecast_event_count_mean, forecast_event_count_std)]
+
+    # Store the results for each forecast year
+    for i in range(3):  # Forecasting for 3 years ahead
+        forecast_results.append({
+            'Year': year + i + 1,
+            'Business Line': business_line,
+            'Event Type': event_type,
+            'Forecasted VaR Net Loss': var_net_loss_forecast[i],
+            'Forecasted VaR Event Count': var_event_count_forecast[i],
+        })
+
+# Convert the results into a DataFrame
+forecast_df = pd.DataFrame(forecast_results)
+
+# Display the forecasted VaR values
+print(forecast_df)
+
+# Optionally, plot the forecasts
+plt.figure(figsize=(10, 6))
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Net Loss'], label='Forecasted VaR Net Loss', color='blue')
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Event Count'], label='Forecasted VaR Event Count', color='red')
+plt.xlabel('Year')
+plt.ylabel('VaR')
+plt.title('Forecasted Value-at-Risk (VaR) for Net Loss and Event Count')
+plt.legend()
+plt.show()
+C:\Users\Himanshu Singh\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\base\tsa_model.py:473: ValueWarning: An unsupported index was provided. As a result, forecasts cannot be generated. To use the model for forecasting, use one of the supported classes of index.
+  self._init_dates(dates, freq)
+C:\Users\Himanshu Singh\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\base\tsa_model.py:473: ValueWarning: An unsupported index was provided. As a result, forecasts cannot be generated. To use the model for forecasting, use one of the supported classes of index.
+  self._init_dates(dates, freq)
+C:\Users\Himanshu Singh\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\base\tsa_model.py:473: ValueWarning: An unsupported index was provided. As a result, forecasts cannot be generated. To use the model for forecasting, use one of the supported classes of index.
+  self._init_dates(dates, freq)
+C:\Users\Himanshu Singh\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\statespace\sarimax.py:866: UserWarning: Too few observations to estimate starting parameters for ARMA and trend. All parameters except for variances will be set to zeros.
+  warn('Too few observations to estimate starting parameters%s.'
+C:\Users\Himanshu Singh\AppData\Local\Programs\Python\Python312\Lib\site-packages\numpy\core\fromnumeric.py:3787: RuntimeWarning: Degrees of freedom <= 0 for slice
+  return _methods._var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+C:\Users\Himanshu Singh\AppData\Local\Programs\Python\Python312\Lib\site-packages\numpy\core\_methods.py:163: RuntimeWarning: invalid value encountered in divide
+  arrmean = um.true_divide(arrmean, div, out=arrmean,
+C:\Users\Himanshu Singh\AppData\Local\Programs\Python\Python312\Lib\site-packages\numpy\core\_methods.py:198: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+---------------------------------------------------------------------------
+LinAlgError                               Traceback (most recent call last)
+Cell In[13], line 31
+     29 # ARIMA model for Net Loss
+     30 model_net_loss = ARIMA(net_loss_series, order=(5, 1, 0))  # Example: (p=5, d=1, q=0) 
+---> 31 model_net_loss_fit = model_net_loss.fit()
+     33 # Forecasting the next 1-3 years (adjust forecast steps as needed)
+     34 forecast_net_loss = model_net_loss_fit.get_forecast(steps=3)
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\arima\model.py:395, in ARIMA.fit(self, start_params, transformed, includes_fixed, method, method_kwargs, gls, gls_kwargs, cov_type, cov_kwds, return_params, low_memory)
+    392 else:
+    393     method_kwargs.setdefault('disp', 0)
+--> 395     res = super().fit(
+    396         return_params=return_params, low_memory=low_memory,
+    397         cov_type=cov_type, cov_kwds=cov_kwds, **method_kwargs)
+    398     if not return_params:
+    399         res.fit_details = res.mlefit
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\statespace\mlemodel.py:705, in MLEModel.fit(self, start_params, transformed, includes_fixed, cov_type, cov_kwds, method, maxiter, full_output, disp, callback, return_params, optim_score, optim_complex_step, optim_hessian, flags, low_memory, **kwargs)
+    703         flags['hessian_method'] = optim_hessian
+    704     fargs = (flags,)
+--> 705     mlefit = super().fit(start_params, method=method,
+    706                          fargs=fargs,
+    707                          maxiter=maxiter,
+    708                          full_output=full_output,
+    709                          disp=disp, callback=callback,
+    710                          skip_hessian=True, **kwargs)
+    712 # Just return the fitted parameters if requested
+    713 if return_params:
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\base\model.py:566, in LikelihoodModel.fit(self, start_params, method, maxiter, full_output, disp, fargs, callback, retall, skip_hessian, **kwargs)
+    563     del kwargs["use_t"]
+    565 optimizer = Optimizer()
+--> 566 xopt, retvals, optim_settings = optimizer._fit(f, score, start_params,
+    567                                                fargs, kwargs,
+    568                                                hessian=hess,
+    569                                                method=method,
+    570                                                disp=disp,
+    571                                                maxiter=maxiter,
+    572                                                callback=callback,
+    573                                                retall=retall,
+    574                                                full_output=full_output)
+    575 # Restore cov_type, cov_kwds and use_t
+    576 optim_settings.update(kwds)
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\base\optimizer.py:243, in Optimizer._fit(self, objective, gradient, start_params, fargs, kwargs, hessian, method, maxiter, full_output, disp, callback, retall)
+    240     fit_funcs.update(extra_fit_funcs)
+    242 func = fit_funcs[method]
+--> 243 xopt, retvals = func(objective, gradient, start_params, fargs, kwargs,
+    244                      disp=disp, maxiter=maxiter, callback=callback,
+    245                      retall=retall, full_output=full_output,
+    246                      hess=hessian)
+    248 optim_settings = {'optimizer': method, 'start_params': start_params,
+    249                   'maxiter': maxiter, 'full_output': full_output,
+    250                   'disp': disp, 'fargs': fargs, 'callback': callback,
+    251                   'retall': retall, "extra_fit_funcs": extra_fit_funcs}
+    252 optim_settings.update(kwargs)
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\base\optimizer.py:660, in _fit_lbfgs(f, score, start_params, fargs, kwargs, disp, maxiter, callback, retall, full_output, hess)
+    657 elif approx_grad:
+    658     func = f
+--> 660 retvals = optimize.fmin_l_bfgs_b(func, start_params, maxiter=maxiter,
+    661                                  callback=callback, args=fargs,
+    662                                  bounds=bounds, disp=disp,
+    663                                  **extra_kwargs)
+    665 if full_output:
+    666     xopt, fopt, d = retvals
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\scipy\optimize\_lbfgsb_py.py:237, in fmin_l_bfgs_b(func, x0, fprime, args, approx_grad, bounds, m, factr, pgtol, epsilon, iprint, maxfun, maxiter, disp, callback, maxls)
+    225 callback = _wrap_callback(callback)
+    226 opts = {'disp': disp,
+    227         'iprint': iprint,
+    228         'maxcor': m,
+   (...)
+    234         'callback': callback,
+    235         'maxls': maxls}
+--> 237 res = _minimize_lbfgsb(fun, x0, args=args, jac=jac, bounds=bounds,
+    238                        **opts)
+    239 d = {'grad': res['jac'],
+    240      'task': res['message'],
+    241      'funcalls': res['nfev'],
+    242      'nit': res['nit'],
+    243      'warnflag': res['status']}
+    244 f = res['fun']
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\scipy\optimize\_lbfgsb_py.py:407, in _minimize_lbfgsb(fun, x0, args, jac, bounds, disp, maxcor, ftol, gtol, eps, maxfun, maxiter, iprint, callback, maxls, finite_diff_rel_step, **unknown_options)
+    401 task_str = task.tobytes()
+    402 if task_str.startswith(b'FG'):
+    403     # The minimization routine wants f and g at the current x.
+    404     # Note that interruptions due to maxfun are postponed
+    405     # until the completion of the current minimization iteration.
+    406     # Overwrite f and g:
+--> 407     f, g = func_and_grad(x)
+    408 elif task_str.startswith(b'NEW_X'):
+    409     # new iteration
+    410     n_iterations += 1
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\scipy\optimize\_differentiable_functions.py:296, in ScalarFunction.fun_and_grad(self, x)
+    294 if not np.array_equal(x, self.x):
+    295     self._update_x_impl(x)
+--> 296 self._update_fun()
+    297 self._update_grad()
+    298 return self.f, self.g
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\scipy\optimize\_differentiable_functions.py:262, in ScalarFunction._update_fun(self)
+    260 def _update_fun(self):
+    261     if not self.f_updated:
+--> 262         self._update_fun_impl()
+    263         self.f_updated = True
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\scipy\optimize\_differentiable_functions.py:163, in ScalarFunction.__init__.<locals>.update_fun()
+    162 def update_fun():
+--> 163     self.f = fun_wrapped(self.x)
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\scipy\optimize\_differentiable_functions.py:145, in ScalarFunction.__init__.<locals>.fun_wrapped(x)
+    141 self.nfev += 1
+    142 # Send a copy because the user may overwrite it.
+    143 # Overwriting results in undefined behaviour because
+    144 # fun(self.x) will change self.x, with the two no longer linked.
+--> 145 fx = fun(np.copy(x), *args)
+    146 # Make sure the function returns a true scalar
+    147 if not np.isscalar(fx):
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\base\model.py:534, in LikelihoodModel.fit.<locals>.f(params, *args)
+    533 def f(params, *args):
+--> 534     return -self.loglike(params, *args) / nobs
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\statespace\mlemodel.py:940, in MLEModel.loglike(self, params, *args, **kwargs)
+    937 if complex_step:
+    938     kwargs['inversion_method'] = INVERT_UNIVARIATE | SOLVE_LU
+--> 940 loglike = self.ssm.loglike(complex_step=complex_step, **kwargs)
+    942 # Koopman, Shephard, and Doornik recommend maximizing the average
+    943 # likelihood to avoid scale issues, but the averaging is done
+    944 # automatically in the base model `fit` method
+    945 return loglike
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\statespace\kalman_filter.py:1001, in KalmanFilter.loglike(self, **kwargs)
+    985 r"""
+    986 Calculate the loglikelihood associated with the statespace model.
+    987 
+   (...)
+    997     The joint loglikelihood.
+    998 """
+    999 kwargs.setdefault('conserve_memory',
+   1000                   MEMORY_CONSERVE ^ MEMORY_NO_LIKELIHOOD)
+-> 1001 kfilter = self._filter(**kwargs)
+   1002 loglikelihood_burn = kwargs.get('loglikelihood_burn',
+   1003                                 self.loglikelihood_burn)
+   1004 if not (kwargs['conserve_memory'] & MEMORY_NO_LIKELIHOOD):
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\statespace\kalman_filter.py:921, in KalmanFilter._filter(self, filter_method, inversion_method, stability_method, conserve_memory, filter_timing, tolerance, loglikelihood_burn, complex_step)
+    918 kfilter = self._kalman_filters[prefix]
+    920 # Initialize the state
+--> 921 self._initialize_state(prefix=prefix, complex_step=complex_step)
+    923 # Run the filter
+    924 kfilter()
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\statsmodels\tsa\statespace\representation.py:1058, in Representation._initialize_state(self, prefix, complex_step)
+   1056     if not self.initialization.initialized:
+   1057         raise RuntimeError('Initialization is incomplete.')
+-> 1058     self._statespaces[prefix].initialize(self.initialization,
+   1059                                          complex_step=complex_step)
+   1060 else:
+   1061     raise RuntimeError('Statespace model not initialized.')
+
+File statsmodels\\tsa\\statespace\\_representation.pyx:1373, in statsmodels.tsa.statespace._representation.dStatespace.initialize()
+
+File statsmodels\\tsa\\statespace\\_representation.pyx:1362, in statsmodels.tsa.statespace._representation.dStatespace.initialize()
+
+File statsmodels\\tsa\\statespace\\_initialization.pyx:288, in statsmodels.tsa.statespace._initialization.dInitialization.initialize()
+
+File statsmodels\\tsa\\statespace\\_initialization.pyx:406, in statsmodels.tsa.statespace._initialization.dInitialization.initialize_stationary_stationary_cov()
+
+File statsmodels\\tsa\\statespace\\_tools.pyx:1626, in statsmodels.tsa.statespace._tools._dsolve_discrete_lyapunov()
+
+LinAlgError: Schur decomposition solver error.
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.tsa.arima.model import ARIMA
+import matplotlib.pyplot as plt
+from scipy import stats
+
+# Load your data
+df = pd.read_csv("operational_risk_dataset_expanded.csv")
+df['Date'] = pd.to_datetime(df['Date'])
+df['Year'] = df['Date'].dt.year
+
+# Check for missing or constant data
+print(df['Net Loss Amount'].describe())
+print(df['Event Type'].describe())
+
+# Handle missing data (if necessary)
+df.fillna(method='ffill', inplace=True)
+
+# Group the data by Year, Business Line, Event Type
+grouped = df.groupby(['Year', 'Business Line', 'Event Type'])
+
+# Initialize the results list
+forecast_results = []
+
+# Function to calculate VaR
+def calculate_var(predicted_mean, predicted_std):
+    z_99 = stats.norm.ppf(0.99)  # Z-score for 99% confidence
+    return predicted_mean + z_99 * predicted_std
+
+# Forecast VaR for Net Loss and Event Count for each category
+for (year, business_line, event_type), group in grouped:
+    # Summing Net Loss for each year
+    net_loss_series = group['Net Loss Amount'].groupby(group['Year']).sum()  
+    # Counting Events for each year
+    event_count_series = group['Event Type'].groupby(group['Year']).count()  
+    
+    # Check if the series has constant values
+    if net_loss_series.nunique() == 1 or event_count_series.nunique() == 1:
+        print(f"Skipping {business_line}-{event_type} for Year {year} due to constant values.")
+        continue
+    
+    # ARIMA model for Net Loss
+    model_net_loss = ARIMA(net_loss_series, order=(5, 1, 0))  # Example: (p=5, d=1, q=0) 
+    model_net_loss_fit = model_net_loss.fit()
+    
+    # Forecasting the next 1-3 years (adjust forecast steps as needed)
+    forecast_net_loss = model_net_loss_fit.get_forecast(steps=3)
+    forecast_net_loss_mean = forecast_net_loss.predicted_mean
+    forecast_net_loss_std = forecast_net_loss.se_mean  # Standard deviation for forecast
+    
+    # ARIMA model for Event Count
+    model_event_count = ARIMA(event_count_series, order=(5, 1, 0))  # Example: (p=5, d=1, q=0)
+    model_event_count_fit = model_event_count.fit()
+    
+    # Forecasting the next 1-3 years (adjust forecast steps as needed)
+    forecast_event_count = model_event_count_fit.get_forecast(steps=3)
+    forecast_event_count_mean = forecast_event_count.predicted_mean
+    forecast_event_count_std = forecast_event_count.se_mean  # Standard deviation for forecast
+
+    # Calculate VaR for the forecasted values
+    var_net_loss_forecast = [calculate_var(mean, std) for mean, std in zip(forecast_net_loss_mean, forecast_net_loss_std)]
+    var_event_count_forecast = [calculate_var(mean, std) for mean, std in zip(forecast_event_count_mean, forecast_event_count_std)]
+
+    # Store the results for each forecast year
+    for i in range(3):  # Forecasting for 3 years ahead
+        forecast_results.append({
+            'Year': year + i + 1,
+            'Business Line': business_line,
+            'Event Type': event_type,
+            'Forecasted VaR Net Loss': var_net_loss_forecast[i],
+            'Forecasted VaR Event Count': var_event_count_forecast[i],
+        })
+
+# Convert the results into a DataFrame
+forecast_df = pd.DataFrame(forecast_results)
+
+# Display the forecasted VaR values
+print(forecast_df)
+
+# Optionally, plot the forecasts
+plt.figure(figsize=(10, 6))
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Net Loss'], label='Forecasted VaR Net Loss', color='blue')
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Event Count'], label='Forecasted VaR Event Count', color='red')
+plt.xlabel('Year')
+plt.ylabel('VaR')
+plt.title('Forecasted Value-at-Risk (VaR) for Net Loss and Event Count')
+plt.legend()
+plt.show()
+count    16000.000000
+mean     23024.465416
+std      18067.519778
+min     -49980.050000
+25%      11284.290000
+50%      24520.295000
+75%      37280.042500
+max      49999.350000
+Name: Net Loss Amount, dtype: float64
+count               16000
+unique                  9
+top       System-Failure@
+freq                 1815
+Name: Event Type, dtype: object
+Skipping Corporate-Banking!-Compliance# for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Data&Breach for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Fraud$ for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Payment@Error for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Physical*Damage for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Security#Breach for Year 2020 due to constant values.
+Skipping Corporate-Banking!-System-Failure@ for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Insurance&-Compliance# for Year 2020 due to constant values.
+Skipping Insurance&-Data&Breach for Year 2020 due to constant values.
+Skipping Insurance&-Fraud$ for Year 2020 due to constant values.
+Skipping Insurance&-Payment@Error for Year 2020 due to constant values.
+Skipping Insurance&-Physical*Damage for Year 2020 due to constant values.
+Skipping Insurance&-Security#Breach for Year 2020 due to constant values.
+Skipping Insurance&-System-Failure@ for Year 2020 due to constant values.
+Skipping Insurance&-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Insurance&-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Investment$Banking-Compliance# for Year 2020 due to constant values.
+Skipping Investment$Banking-Data&Breach for Year 2020 due to constant values.
+Skipping Investment$Banking-Fraud$ for Year 2020 due to constant values.
+Skipping Investment$Banking-Payment@Error for Year 2020 due to constant values.
+Skipping Investment$Banking-Physical*Damage for Year 2020 due to constant values.
+Skipping Investment$Banking-Security#Breach for Year 2020 due to constant values.
+Skipping Investment$Banking-System-Failure@ for Year 2020 due to constant values.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Investment$Banking-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Private@Equity-Compliance# for Year 2020 due to constant values.
+Skipping Private@Equity-Data&Breach for Year 2020 due to constant values.
+Skipping Private@Equity-Fraud$ for Year 2020 due to constant values.
+Skipping Private@Equity-Payment@Error for Year 2020 due to constant values.
+Skipping Private@Equity-Physical*Damage for Year 2020 due to constant values.
+Skipping Private@Equity-Security#Breach for Year 2020 due to constant values.
+Skipping Private@Equity-System-Failure@ for Year 2020 due to constant values.
+Skipping Private@Equity-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Private@Equity-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Retail_Banking-Compliance# for Year 2020 due to constant values.
+Skipping Retail_Banking-Data&Breach for Year 2020 due to constant values.
+Skipping Retail_Banking-Fraud$ for Year 2020 due to constant values.
+Skipping Retail_Banking-Payment@Error for Year 2020 due to constant values.
+Skipping Retail_Banking-Physical*Damage for Year 2020 due to constant values.
+Skipping Retail_Banking-Security#Breach for Year 2020 due to constant values.
+Skipping Retail_Banking-System-Failure@ for Year 2020 due to constant values.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Retail_Banking-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Risk&Compliance-Compliance# for Year 2020 due to constant values.
+Skipping Risk&Compliance-Data&Breach for Year 2020 due to constant values.
+Skipping Risk&Compliance-Fraud$ for Year 2020 due to constant values.
+Skipping Risk&Compliance-Payment@Error for Year 2020 due to constant values.
+Skipping Risk&Compliance-Physical*Damage for Year 2020 due to constant values.
+Skipping Risk&Compliance-Security#Breach for Year 2020 due to constant values.
+Skipping Risk&Compliance-System-Failure@ for Year 2020 due to constant values.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Treasury#Services-Compliance# for Year 2020 due to constant values.
+Skipping Treasury#Services-Data&Breach for Year 2020 due to constant values.
+Skipping Treasury#Services-Fraud$ for Year 2020 due to constant values.
+Skipping Treasury#Services-Payment@Error for Year 2020 due to constant values.
+Skipping Treasury#Services-Physical*Damage for Year 2020 due to constant values.
+Skipping Treasury#Services-Security#Breach for Year 2020 due to constant values.
+Skipping Treasury#Services-System-Failure@ for Year 2020 due to constant values.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Treasury#Services-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Wealth*Management-Compliance# for Year 2020 due to constant values.
+Skipping Wealth*Management-Data&Breach for Year 2020 due to constant values.
+Skipping Wealth*Management-Fraud$ for Year 2020 due to constant values.
+Skipping Wealth*Management-Payment@Error for Year 2020 due to constant values.
+Skipping Wealth*Management-Physical*Damage for Year 2020 due to constant values.
+Skipping Wealth*Management-Security#Breach for Year 2020 due to constant values.
+Skipping Wealth*Management-System-Failure@ for Year 2020 due to constant values.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2020 due to constant values.
+Skipping Wealth*Management-Unauthorized*Access for Year 2020 due to constant values.
+Skipping Corporate-Banking!-Compliance# for Year 2021 due to constant values.
+Skipping Corporate-Banking!-Data&Breach for Year 2021 due to constant values.
+Skipping Corporate-Banking!-Fraud$ for Year 2021 due to constant values.
+Skipping Corporate-Banking!-Payment@Error for Year 2021 due to constant values.
+Skipping Corporate-Banking!-Physical*Damage for Year 2021 due to constant values.
+C:\Users\Himanshu Singh\AppData\Local\Temp\ipykernel_39340\4097107442.py:18: FutureWarning: DataFrame.fillna with 'method' is deprecated and will raise in a future version. Use obj.ffill() or obj.bfill() instead.
+  df.fillna(method='ffill', inplace=True)
+Skipping Corporate-Banking!-Security#Breach for Year 2021 due to constant values.
+Skipping Corporate-Banking!-System-Failure@ for Year 2021 due to constant values.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Insurance&-Compliance# for Year 2021 due to constant values.
+Skipping Insurance&-Data&Breach for Year 2021 due to constant values.
+Skipping Insurance&-Fraud$ for Year 2021 due to constant values.
+Skipping Insurance&-Payment@Error for Year 2021 due to constant values.
+Skipping Insurance&-Physical*Damage for Year 2021 due to constant values.
+Skipping Insurance&-Security#Breach for Year 2021 due to constant values.
+Skipping Insurance&-System-Failure@ for Year 2021 due to constant values.
+Skipping Insurance&-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Insurance&-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Investment$Banking-Compliance# for Year 2021 due to constant values.
+Skipping Investment$Banking-Data&Breach for Year 2021 due to constant values.
+Skipping Investment$Banking-Fraud$ for Year 2021 due to constant values.
+Skipping Investment$Banking-Payment@Error for Year 2021 due to constant values.
+Skipping Investment$Banking-Physical*Damage for Year 2021 due to constant values.
+Skipping Investment$Banking-Security#Breach for Year 2021 due to constant values.
+Skipping Investment$Banking-System-Failure@ for Year 2021 due to constant values.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Investment$Banking-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Private@Equity-Compliance# for Year 2021 due to constant values.
+Skipping Private@Equity-Data&Breach for Year 2021 due to constant values.
+Skipping Private@Equity-Fraud$ for Year 2021 due to constant values.
+Skipping Private@Equity-Payment@Error for Year 2021 due to constant values.
+Skipping Private@Equity-Physical*Damage for Year 2021 due to constant values.
+Skipping Private@Equity-Security#Breach for Year 2021 due to constant values.
+Skipping Private@Equity-System-Failure@ for Year 2021 due to constant values.
+Skipping Private@Equity-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Private@Equity-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Retail_Banking-Compliance# for Year 2021 due to constant values.
+Skipping Retail_Banking-Data&Breach for Year 2021 due to constant values.
+Skipping Retail_Banking-Fraud$ for Year 2021 due to constant values.
+Skipping Retail_Banking-Payment@Error for Year 2021 due to constant values.
+Skipping Retail_Banking-Physical*Damage for Year 2021 due to constant values.
+Skipping Retail_Banking-Security#Breach for Year 2021 due to constant values.
+Skipping Retail_Banking-System-Failure@ for Year 2021 due to constant values.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Retail_Banking-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Risk&Compliance-Compliance# for Year 2021 due to constant values.
+Skipping Risk&Compliance-Data&Breach for Year 2021 due to constant values.
+Skipping Risk&Compliance-Fraud$ for Year 2021 due to constant values.
+Skipping Risk&Compliance-Payment@Error for Year 2021 due to constant values.
+Skipping Risk&Compliance-Physical*Damage for Year 2021 due to constant values.
+Skipping Risk&Compliance-Security#Breach for Year 2021 due to constant values.
+Skipping Risk&Compliance-System-Failure@ for Year 2021 due to constant values.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Treasury#Services-Compliance# for Year 2021 due to constant values.
+Skipping Treasury#Services-Data&Breach for Year 2021 due to constant values.
+Skipping Treasury#Services-Fraud$ for Year 2021 due to constant values.
+Skipping Treasury#Services-Payment@Error for Year 2021 due to constant values.
+Skipping Treasury#Services-Physical*Damage for Year 2021 due to constant values.
+Skipping Treasury#Services-Security#Breach for Year 2021 due to constant values.
+Skipping Treasury#Services-System-Failure@ for Year 2021 due to constant values.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Treasury#Services-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Wealth*Management-Compliance# for Year 2021 due to constant values.
+Skipping Wealth*Management-Data&Breach for Year 2021 due to constant values.
+Skipping Wealth*Management-Fraud$ for Year 2021 due to constant values.
+Skipping Wealth*Management-Payment@Error for Year 2021 due to constant values.
+Skipping Wealth*Management-Physical*Damage for Year 2021 due to constant values.
+Skipping Wealth*Management-Security#Breach for Year 2021 due to constant values.
+Skipping Wealth*Management-System-Failure@ for Year 2021 due to constant values.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2021 due to constant values.
+Skipping Wealth*Management-Unauthorized*Access for Year 2021 due to constant values.
+Skipping Corporate-Banking!-Compliance# for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Data&Breach for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Fraud$ for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Payment@Error for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Physical*Damage for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Security#Breach for Year 2022 due to constant values.
+Skipping Corporate-Banking!-System-Failure@ for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Insurance&-Compliance# for Year 2022 due to constant values.
+Skipping Insurance&-Data&Breach for Year 2022 due to constant values.
+Skipping Insurance&-Fraud$ for Year 2022 due to constant values.
+Skipping Insurance&-Payment@Error for Year 2022 due to constant values.
+Skipping Insurance&-Physical*Damage for Year 2022 due to constant values.
+Skipping Insurance&-Security#Breach for Year 2022 due to constant values.
+Skipping Insurance&-System-Failure@ for Year 2022 due to constant values.
+Skipping Insurance&-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Insurance&-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Investment$Banking-Compliance# for Year 2022 due to constant values.
+Skipping Investment$Banking-Data&Breach for Year 2022 due to constant values.
+Skipping Investment$Banking-Fraud$ for Year 2022 due to constant values.
+Skipping Investment$Banking-Payment@Error for Year 2022 due to constant values.
+Skipping Investment$Banking-Physical*Damage for Year 2022 due to constant values.
+Skipping Investment$Banking-Security#Breach for Year 2022 due to constant values.
+Skipping Investment$Banking-System-Failure@ for Year 2022 due to constant values.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Investment$Banking-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Private@Equity-Compliance# for Year 2022 due to constant values.
+Skipping Private@Equity-Data&Breach for Year 2022 due to constant values.
+Skipping Private@Equity-Fraud$ for Year 2022 due to constant values.
+Skipping Private@Equity-Payment@Error for Year 2022 due to constant values.
+Skipping Private@Equity-Physical*Damage for Year 2022 due to constant values.
+Skipping Private@Equity-Security#Breach for Year 2022 due to constant values.
+Skipping Private@Equity-System-Failure@ for Year 2022 due to constant values.
+Skipping Private@Equity-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Private@Equity-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Retail_Banking-Compliance# for Year 2022 due to constant values.
+Skipping Retail_Banking-Data&Breach for Year 2022 due to constant values.
+Skipping Retail_Banking-Fraud$ for Year 2022 due to constant values.
+Skipping Retail_Banking-Payment@Error for Year 2022 due to constant values.
+Skipping Retail_Banking-Physical*Damage for Year 2022 due to constant values.
+Skipping Retail_Banking-Security#Breach for Year 2022 due to constant values.
+Skipping Retail_Banking-System-Failure@ for Year 2022 due to constant values.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Retail_Banking-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Risk&Compliance-Compliance# for Year 2022 due to constant values.
+Skipping Risk&Compliance-Data&Breach for Year 2022 due to constant values.
+Skipping Risk&Compliance-Fraud$ for Year 2022 due to constant values.
+Skipping Risk&Compliance-Payment@Error for Year 2022 due to constant values.
+Skipping Risk&Compliance-Physical*Damage for Year 2022 due to constant values.
+Skipping Risk&Compliance-Security#Breach for Year 2022 due to constant values.
+Skipping Risk&Compliance-System-Failure@ for Year 2022 due to constant values.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Treasury#Services-Compliance# for Year 2022 due to constant values.
+Skipping Treasury#Services-Data&Breach for Year 2022 due to constant values.
+Skipping Treasury#Services-Fraud$ for Year 2022 due to constant values.
+Skipping Treasury#Services-Payment@Error for Year 2022 due to constant values.
+Skipping Treasury#Services-Physical*Damage for Year 2022 due to constant values.
+Skipping Treasury#Services-Security#Breach for Year 2022 due to constant values.
+Skipping Treasury#Services-System-Failure@ for Year 2022 due to constant values.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Treasury#Services-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Wealth*Management-Compliance# for Year 2022 due to constant values.
+Skipping Wealth*Management-Data&Breach for Year 2022 due to constant values.
+Skipping Wealth*Management-Fraud$ for Year 2022 due to constant values.
+Skipping Wealth*Management-Payment@Error for Year 2022 due to constant values.
+Skipping Wealth*Management-Physical*Damage for Year 2022 due to constant values.
+Skipping Wealth*Management-Security#Breach for Year 2022 due to constant values.
+Skipping Wealth*Management-System-Failure@ for Year 2022 due to constant values.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2022 due to constant values.
+Skipping Wealth*Management-Unauthorized*Access for Year 2022 due to constant values.
+Skipping Corporate-Banking!-Compliance# for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Data&Breach for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Fraud$ for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Payment@Error for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Physical*Damage for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Security#Breach for Year 2023 due to constant values.
+Skipping Corporate-Banking!-System-Failure@ for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Insurance&-Compliance# for Year 2023 due to constant values.
+Skipping Insurance&-Data&Breach for Year 2023 due to constant values.
+Skipping Insurance&-Fraud$ for Year 2023 due to constant values.
+Skipping Insurance&-Payment@Error for Year 2023 due to constant values.
+Skipping Insurance&-Physical*Damage for Year 2023 due to constant values.
+Skipping Insurance&-Security#Breach for Year 2023 due to constant values.
+Skipping Insurance&-System-Failure@ for Year 2023 due to constant values.
+Skipping Insurance&-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Insurance&-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Investment$Banking-Compliance# for Year 2023 due to constant values.
+Skipping Investment$Banking-Data&Breach for Year 2023 due to constant values.
+Skipping Investment$Banking-Fraud$ for Year 2023 due to constant values.
+Skipping Investment$Banking-Payment@Error for Year 2023 due to constant values.
+Skipping Investment$Banking-Physical*Damage for Year 2023 due to constant values.
+Skipping Investment$Banking-Security#Breach for Year 2023 due to constant values.
+Skipping Investment$Banking-System-Failure@ for Year 2023 due to constant values.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Investment$Banking-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Private@Equity-Compliance# for Year 2023 due to constant values.
+Skipping Private@Equity-Data&Breach for Year 2023 due to constant values.
+Skipping Private@Equity-Fraud$ for Year 2023 due to constant values.
+Skipping Private@Equity-Payment@Error for Year 2023 due to constant values.
+Skipping Private@Equity-Physical*Damage for Year 2023 due to constant values.
+Skipping Private@Equity-Security#Breach for Year 2023 due to constant values.
+Skipping Private@Equity-System-Failure@ for Year 2023 due to constant values.
+Skipping Private@Equity-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Private@Equity-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Retail_Banking-Compliance# for Year 2023 due to constant values.
+Skipping Retail_Banking-Data&Breach for Year 2023 due to constant values.
+Skipping Retail_Banking-Fraud$ for Year 2023 due to constant values.
+Skipping Retail_Banking-Payment@Error for Year 2023 due to constant values.
+Skipping Retail_Banking-Physical*Damage for Year 2023 due to constant values.
+Skipping Retail_Banking-Security#Breach for Year 2023 due to constant values.
+Skipping Retail_Banking-System-Failure@ for Year 2023 due to constant values.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Retail_Banking-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Risk&Compliance-Compliance# for Year 2023 due to constant values.
+Skipping Risk&Compliance-Data&Breach for Year 2023 due to constant values.
+Skipping Risk&Compliance-Fraud$ for Year 2023 due to constant values.
+Skipping Risk&Compliance-Payment@Error for Year 2023 due to constant values.
+Skipping Risk&Compliance-Physical*Damage for Year 2023 due to constant values.
+Skipping Risk&Compliance-Security#Breach for Year 2023 due to constant values.
+Skipping Risk&Compliance-System-Failure@ for Year 2023 due to constant values.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Treasury#Services-Compliance# for Year 2023 due to constant values.
+Skipping Treasury#Services-Data&Breach for Year 2023 due to constant values.
+Skipping Treasury#Services-Fraud$ for Year 2023 due to constant values.
+Skipping Treasury#Services-Payment@Error for Year 2023 due to constant values.
+Skipping Treasury#Services-Physical*Damage for Year 2023 due to constant values.
+Skipping Treasury#Services-Security#Breach for Year 2023 due to constant values.
+Skipping Treasury#Services-System-Failure@ for Year 2023 due to constant values.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Treasury#Services-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Wealth*Management-Compliance# for Year 2023 due to constant values.
+Skipping Wealth*Management-Data&Breach for Year 2023 due to constant values.
+Skipping Wealth*Management-Fraud$ for Year 2023 due to constant values.
+Skipping Wealth*Management-Payment@Error for Year 2023 due to constant values.
+Skipping Wealth*Management-Physical*Damage for Year 2023 due to constant values.
+Skipping Wealth*Management-Security#Breach for Year 2023 due to constant values.
+Skipping Wealth*Management-System-Failure@ for Year 2023 due to constant values.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2023 due to constant values.
+Skipping Wealth*Management-Unauthorized*Access for Year 2023 due to constant values.
+Skipping Corporate-Banking!-Compliance# for Year 2024 due to constant values.
+Skipping Corporate-Banking!-Data&Breach for Year 2024 due to constant values.
+Skipping Corporate-Banking!-Fraud$ for Year 2024 due to constant values.
+Skipping Corporate-Banking!-Payment@Error for Year 2024 due to constant values.
+Skipping Corporate-Banking!-Physical*Damage for Year 2024 due to constant values.
+Skipping Corporate-Banking!-Security#Breach for Year 2024 due to constant values.
+Skipping Corporate-Banking!-System-Failure@ for Year 2024 due to constant values.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2024 due to constant values.
+Skipping Insurance&-Compliance# for Year 2024 due to constant values.
+Skipping Insurance&-Data&Breach for Year 2024 due to constant values.
+Skipping Insurance&-Fraud$ for Year 2024 due to constant values.
+Skipping Insurance&-Payment@Error for Year 2024 due to constant values.
+Skipping Insurance&-Physical*Damage for Year 2024 due to constant values.
+Skipping Insurance&-Security#Breach for Year 2024 due to constant values.
+Skipping Insurance&-System-Failure@ for Year 2024 due to constant values.
+Skipping Insurance&-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Insurance&-Unauthorized*Access for Year 2024 due to constant values.
+Skipping Investment$Banking-Compliance# for Year 2024 due to constant values.
+Skipping Investment$Banking-Data&Breach for Year 2024 due to constant values.
+Skipping Investment$Banking-Fraud$ for Year 2024 due to constant values.
+Skipping Investment$Banking-Payment@Error for Year 2024 due to constant values.
+Skipping Investment$Banking-Physical*Damage for Year 2024 due to constant values.
+Skipping Investment$Banking-Security#Breach for Year 2024 due to constant values.
+Skipping Investment$Banking-System-Failure@ for Year 2024 due to constant values.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Investment$Banking-Unauthorized*Access for Year 2024 due to constant values.
+Skipping Private@Equity-Compliance# for Year 2024 due to constant values.
+Skipping Private@Equity-Data&Breach for Year 2024 due to constant values.
+Skipping Private@Equity-Fraud$ for Year 2024 due to constant values.
+Skipping Private@Equity-Payment@Error for Year 2024 due to constant values.
+Skipping Private@Equity-Physical*Damage for Year 2024 due to constant values.
+Skipping Private@Equity-Security#Breach for Year 2024 due to constant values.
+Skipping Private@Equity-System-Failure@ for Year 2024 due to constant values.
+Skipping Private@Equity-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Private@Equity-Unauthorized*Access for Year 2024 due to constant values.
+Skipping Retail_Banking-Compliance# for Year 2024 due to constant values.
+Skipping Retail_Banking-Data&Breach for Year 2024 due to constant values.
+Skipping Retail_Banking-Fraud$ for Year 2024 due to constant values.
+Skipping Retail_Banking-Payment@Error for Year 2024 due to constant values.
+Skipping Retail_Banking-Physical*Damage for Year 2024 due to constant values.
+Skipping Retail_Banking-Security#Breach for Year 2024 due to constant values.
+Skipping Retail_Banking-System-Failure@ for Year 2024 due to constant values.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Retail_Banking-Unauthorized*Access for Year 2024 due to constant values.
+Skipping Risk&Compliance-Compliance# for Year 2024 due to constant values.
+Skipping Risk&Compliance-Data&Breach for Year 2024 due to constant values.
+Skipping Risk&Compliance-Fraud$ for Year 2024 due to constant values.
+Skipping Risk&Compliance-Payment@Error for Year 2024 due to constant values.
+Skipping Risk&Compliance-Physical*Damage for Year 2024 due to constant values.
+Skipping Risk&Compliance-Security#Breach for Year 2024 due to constant values.
+Skipping Risk&Compliance-System-Failure@ for Year 2024 due to constant values.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2024 due to constant values.
+Skipping Treasury#Services-Compliance# for Year 2024 due to constant values.
+Skipping Treasury#Services-Data&Breach for Year 2024 due to constant values.
+Skipping Treasury#Services-Fraud$ for Year 2024 due to constant values.
+Skipping Treasury#Services-Payment@Error for Year 2024 due to constant values.
+Skipping Treasury#Services-Physical*Damage for Year 2024 due to constant values.
+Skipping Treasury#Services-Security#Breach for Year 2024 due to constant values.
+Skipping Treasury#Services-System-Failure@ for Year 2024 due to constant values.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Treasury#Services-Unauthorized*Access for Year 2024 due to constant values.
+Skipping Wealth*Management-Compliance# for Year 2024 due to constant values.
+Skipping Wealth*Management-Data&Breach for Year 2024 due to constant values.
+Skipping Wealth*Management-Fraud$ for Year 2024 due to constant values.
+Skipping Wealth*Management-Payment@Error for Year 2024 due to constant values.
+Skipping Wealth*Management-Physical*Damage for Year 2024 due to constant values.
+Skipping Wealth*Management-Security#Breach for Year 2024 due to constant values.
+Skipping Wealth*Management-System-Failure@ for Year 2024 due to constant values.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2024 due to constant values.
+Skipping Wealth*Management-Unauthorized*Access for Year 2024 due to constant values.
+Empty DataFrame
+Columns: []
+Index: []
+---------------------------------------------------------------------------
+KeyError                                  Traceback (most recent call last)
+Cell In[18], line 83
+     81 # Optionally, plot the forecasts
+     82 plt.figure(figsize=(10, 6))
+---> 83 plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Net Loss'], label='Forecasted VaR Net Loss', color='blue')
+     84 plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Event Count'], label='Forecasted VaR Event Count', color='red')
+     85 plt.xlabel('Year')
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\frame.py:4102, in DataFrame.__getitem__(self, key)
+   4100 if self.columns.nlevels > 1:
+   4101     return self._getitem_multilevel(key)
+-> 4102 indexer = self.columns.get_loc(key)
+   4103 if is_integer(indexer):
+   4104     indexer = [indexer]
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\indexes\range.py:417, in RangeIndex.get_loc(self, key)
+    415         raise KeyError(key) from err
+    416 if isinstance(key, Hashable):
+--> 417     raise KeyError(key)
+    418 self._check_indexing_error(key)
+    419 raise KeyError(key)
+
+KeyError: 'Year'
+<Figure size 1000x600 with 0 Axes>
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.tsa.arima.model import ARIMA
+import matplotlib.pyplot as plt
+from scipy import stats
+
+# Load your data
+df = pd.read_csv("operational_risk_dataset_expanded.csv")
+df['Date'] = pd.to_datetime(df['Date'])
+df['Year'] = df['Date'].dt.year
+
+# Check for missing or constant data
+print(df['Net Loss Amount'].describe())
+print(df['Event Type'].describe())
+
+# Handle missing data (if necessary)
+df.fillna(method='ffill', inplace=True)
+
+# Group the data by Year, Business Line, Event Type
+grouped = df.groupby(['Year', 'Business Line', 'Event Type'])
+
+# Initialize the results list
+forecast_results = []
+
+# Function to calculate VaR
+def calculate_var(predicted_mean, predicted_std):
+    z_99 = stats.norm.ppf(0.99)  # Z-score for 99% confidence
+    return predicted_mean + z_99 * predicted_std
+
+# Forecast VaR for Net Loss and Event Count for each category
+for (year, business_line, event_type), group in grouped:
+    # Summing Net Loss for each year
+    net_loss_series = group['Net Loss Amount'].groupby(group['Year']).sum()  
+    # Counting Events for each year
+    event_count_series = group['Event Type'].groupby(group['Year']).count()  
+    
+    # Check if the series has constant values or insufficient data
+    if len(net_loss_series) < 2 or net_loss_series.nunique() == 1 or len(event_count_series) < 2 or event_count_series.nunique() == 1:
+        print(f"Skipping {business_line}-{event_type} for Year {year} due to insufficient or constant data.")
+        continue
+    
+    # ARIMA model for Net Loss
+    model_net_loss = ARIMA(net_loss_series, order=(5, 1, 0))  # Example: (p=5, d=1, q=0) 
+    model_net_loss_fit = model_net_loss.fit()
+    
+    # Forecasting the next 1-3 years (adjust forecast steps as needed)
+    forecast_net_loss = model_net_loss_fit.get_forecast(steps=3)
+    forecast_net_loss_mean = forecast_net_loss.predicted_mean
+    forecast_net_loss_std = forecast_net_loss.se_mean  # Standard deviation for forecast
+    
+    # ARIMA model for Event Count
+    model_event_count = ARIMA(event_count_series, order=(5, 1, 0))  # Example: (p=5, d=1, q=0)
+    model_event_count_fit = model_event_count.fit()
+    
+    # Forecasting the next 1-3 years (adjust forecast steps as needed)
+    forecast_event_count = model_event_count_fit.get_forecast(steps=3)
+    forecast_event_count_mean = forecast_event_count.predicted_mean
+    forecast_event_count_std = forecast_event_count.se_mean  # Standard deviation for forecast
+
+    # Calculate VaR for the forecasted values
+    var_net_loss_forecast = [calculate_var(mean, std) for mean, std in zip(forecast_net_loss_mean, forecast_net_loss_std)]
+    var_event_count_forecast = [calculate_var(mean, std) for mean, std in zip(forecast_event_count_mean, forecast_event_count_std)]
+
+    # Store the results for each forecast year
+    for i in range(3):  # Forecasting for 3 years ahead
+        forecast_results.append({
+            'Year': year + i + 1,
+            'Business Line': business_line,
+            'Event Type': event_type,
+            'Forecasted VaR Net Loss': var_net_loss_forecast[i],
+            'Forecasted VaR Event Count': var_event_count_forecast[i],
+        })
+
+# Convert the results into a DataFrame
+forecast_df = pd.DataFrame(forecast_results)
+
+# Display the forecasted VaR values
+print(forecast_df)
+
+# Optionally, plot the forecasts
+plt.figure(figsize=(10, 6))
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Net Loss'], label='Forecasted VaR Net Loss', color='blue')
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Event Count'], label='Forecasted VaR Event Count', color='red')
+plt.xlabel('Year')
+plt.ylabel('VaR')
+plt.title('Forecasted Value-at-Risk (VaR) for Net Loss and Event Count')
+plt.legend()
+plt.show()
+count    16000.000000
+mean     23024.465416
+std      18067.519778
+min     -49980.050000
+25%      11284.290000
+50%      24520.295000
+75%      37280.042500
+max      49999.350000
+Name: Net Loss Amount, dtype: float64
+count               16000
+unique                  9
+top       System-Failure@
+freq                 1815
+Name: Event Type, dtype: object
+Skipping Corporate-Banking!-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Insurance&-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Investment$Banking-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Private@Equity-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Retail_Banking-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Treasury#Services-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Compliance# for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Data&Breach for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Fraud$ for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Payment@Error for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Physical*Damage for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Security#Breach for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-System-Failure@ for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2020 due to insufficient or constant data.
+Skipping Wealth*Management-Unauthorized*Access for Year 2020 due to insufficient or constant data.
+Skipping Corporate-Banking!-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+Skipping Insurance&-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+Skipping Investment$Banking-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+Skipping Private@Equity-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+C:\Users\Himanshu Singh\AppData\Local\Temp\ipykernel_39340\1663006241.py:18: FutureWarning: DataFrame.fillna with 'method' is deprecated and will raise in a future version. Use obj.ffill() or obj.bfill() instead.
+  df.fillna(method='ffill', inplace=True)
+Skipping Retail_Banking-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+Skipping Treasury#Services-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Compliance# for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Data&Breach for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Fraud$ for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Payment@Error for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Physical*Damage for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Security#Breach for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-System-Failure@ for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2021 due to insufficient or constant data.
+Skipping Wealth*Management-Unauthorized*Access for Year 2021 due to insufficient or constant data.
+Skipping Corporate-Banking!-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Insurance&-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Investment$Banking-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Private@Equity-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Retail_Banking-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Treasury#Services-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Compliance# for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Data&Breach for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Fraud$ for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Payment@Error for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Physical*Damage for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Security#Breach for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-System-Failure@ for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2022 due to insufficient or constant data.
+Skipping Wealth*Management-Unauthorized*Access for Year 2022 due to insufficient or constant data.
+Skipping Corporate-Banking!-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Insurance&-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Investment$Banking-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Private@Equity-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Retail_Banking-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Treasury#Services-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Compliance# for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Data&Breach for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Fraud$ for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Payment@Error for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Physical*Damage for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Security#Breach for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-System-Failure@ for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2023 due to insufficient or constant data.
+Skipping Wealth*Management-Unauthorized*Access for Year 2023 due to insufficient or constant data.
+Skipping Corporate-Banking!-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Corporate-Banking!-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Insurance&-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Investment$Banking-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Private@Equity-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Retail_Banking-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Risk&Compliance-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Treasury#Services-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Compliance# for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Data&Breach for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Fraud$ for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Payment@Error for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Physical*Damage for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Security#Breach for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-System-Failure@ for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Transaction-Fraud! for Year 2024 due to insufficient or constant data.
+Skipping Wealth*Management-Unauthorized*Access for Year 2024 due to insufficient or constant data.
+Empty DataFrame
+Columns: []
+Index: []
+---------------------------------------------------------------------------
+KeyError                                  Traceback (most recent call last)
+Cell In[19], line 83
+     81 # Optionally, plot the forecasts
+     82 plt.figure(figsize=(10, 6))
+---> 83 plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Net Loss'], label='Forecasted VaR Net Loss', color='blue')
+     84 plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Event Count'], label='Forecasted VaR Event Count', color='red')
+     85 plt.xlabel('Year')
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\frame.py:4102, in DataFrame.__getitem__(self, key)
+   4100 if self.columns.nlevels > 1:
+   4101     return self._getitem_multilevel(key)
+-> 4102 indexer = self.columns.get_loc(key)
+   4103 if is_integer(indexer):
+   4104     indexer = [indexer]
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\indexes\range.py:417, in RangeIndex.get_loc(self, key)
+    415         raise KeyError(key) from err
+    416 if isinstance(key, Hashable):
+--> 417     raise KeyError(key)
+    418 self._check_indexing_error(key)
+    419 raise KeyError(key)
+
+KeyError: 'Year'
+<Figure size 1000x600 with 0 Axes>
+# Convert the results into a DataFrame
+forecast_df = pd.DataFrame(forecast_results)
+
+# Debug: Check the first few rows of forecast_results
+print(forecast_results[:5])  # Print first 5 entries to check structure
+
+# Check the column names to ensure they are correct
+print(forecast_df.columns)
+
+# Display the forecasted VaR values
+print(forecast_df)
+
+# Optionally, plot the forecasts
+plt.figure(figsize=(10, 6))
+
+# Ensure column names match
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Net Loss'], label='Forecasted VaR Net Loss', color='blue')
+plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Event Count'], label='Forecasted VaR Event Count', color='red')
+
+plt.xlabel('Year')
+plt.ylabel('VaR')
+plt.title('Forecasted Value-at-Risk (VaR) for Net Loss and Event Count')
+plt.legend()
+plt.show()
+[]
+RangeIndex(start=0, stop=0, step=1)
+Empty DataFrame
+Columns: []
+Index: []
+---------------------------------------------------------------------------
+KeyError                                  Traceback (most recent call last)
+Cell In[20], line 17
+     14 plt.figure(figsize=(10, 6))
+     16 # Ensure column names match
+---> 17 plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Net Loss'], label='Forecasted VaR Net Loss', color='blue')
+     18 plt.plot(forecast_df['Year'], forecast_df['Forecasted VaR Event Count'], label='Forecasted VaR Event Count', color='red')
+     20 plt.xlabel('Year')
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\frame.py:4102, in DataFrame.__getitem__(self, key)
+   4100 if self.columns.nlevels > 1:
+   4101     return self._getitem_multilevel(key)
+-> 4102 indexer = self.columns.get_loc(key)
+   4103 if is_integer(indexer):
+   4104     indexer = [indexer]
+
+File ~\AppData\Local\Programs\Python\Python312\Lib\site-packages\pandas\core\indexes\range.py:417, in RangeIndex.get_loc(self, key)
+    415         raise KeyError(key) from err
+    416 if isinstance(key, Hashable):
+--> 417     raise KeyError(key)
+    418 self._check_indexing_error(key)
+    419 raise KeyError(key)
+
+KeyError: 'Year'
+<Figure size 1000x600 with 0 Axes>
