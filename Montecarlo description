@@ -1,4 +1,17 @@
-The following is the detailed documentation based on your provided code for calculating Value-at-Risk (VaR) using the Monte Carlo simulation approach, leveraging Poisson distribution for event frequency and Log-Normal distribution for severity. The methodology, results, and interpretation are included to guide business stakeholders.
+Timport pandas as pd
+import matplotlib.pyplot as plt
+
+def addlabels(x,y):
+    for i in range(len(x)):
+        plt.text(i, y[i], y[i], ha = 'center')
+
+df = pd.DataFrame(['A','A','A','B','B','C'], columns = ['letters'])
+plt_df = df.letters.value_counts().sort_values()
+
+plt.bar(plt_df.index, plt_df.values)
+addlabels(plt_df.index, plt_df.values)
+
+he following is the detailed documentation based on your provided code for calculating Value-at-Risk (VaR) using the Monte Carlo simulation approach, leveraging Poisson distribution for event frequency and Log-Normal distribution for severity. The methodology, results, and interpretation are included to guide business stakeholders.
 
 Operational Risk Analysis Using Monte Carlo Simulation for VaR Calculation
 Table of Contents
