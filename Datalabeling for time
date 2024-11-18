@@ -1,1 +1,297 @@
 
+plt.figure(figsize=(10, 6))
+plt.bar(yearly_aggregation['Year'], yearly_aggregation['total_net_loss'], color='skyblue')
+plt.title("Total Net Loss by Year")
+plt.xlabel("Year")
+plt.ylabel("Total Net Loss")
+
+# Adding data labels
+for i, value in enumerate(yearly_aggregation['total_net_loss']):
+    plt.text(yearly_aggregation['Year'][i], value, f"{value:.0f}", ha='center', va='bottom')
+
+plt.show()
+
+plt.figure(figsize=(10, 6))
+plt.bar(yearly_aggregation['Year'], yearly_aggregation['event_count'], color='salmon')
+plt.title("Event Count by Year")
+plt.xlabel("Year")
+plt.ylabel("Event Count")
+
+# Adding data labels
+for i, value in enumerate(yearly_aggregation['event_count']):
+    plt.text(yearly_aggregation['Year'][i], value, f"{value}", ha='center', va='bottom')
+
+plt.show()
+
+# Value counts for Business Line
+business_line_counts = df['Business Line'].value_counts()
+
+# Value counts for Event Type
+event_type_counts = df['Event Type'].value_counts()
+plt.figure(figsize=(10, 6))
+bars = plt.bar(business_line_counts.index, business_line_counts.values, color='skyblue')
+plt.title("Business Line Distribution")
+plt.xlabel("Business Line")
+plt.ylabel("Count")
+plt.xticks(rotation=45)
+
+# Adding data labels
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), ha='center', va='bottom')
+
+plt.show()
+
+plt.figure(figsize=(10, 6))
+bars = plt.bar(event_type_counts.index, event_type_counts.values, color='salmon')
+plt.title("Event Type Distribution")
+plt.xlabel("Event Type")
+plt.ylabel("Count")
+plt.xticks(rotation=45)
+
+# Adding data labels
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), ha='center', va='bottom')
+
+plt.show()
+
+# Define a threshold for labeling (e.g., only label bars with counts > 100)
+threshold = 100
+
+plt.figure(figsize=(10, 6))
+bars = plt.bar(business_line_counts.index, business_line_counts.values, color='skyblue')
+plt.title("Business Line Distribution")
+plt.xlabel("Business Line")
+plt.ylabel("Count")
+plt.xticks(rotation=45)
+
+# Adding data labels only for spikes
+for bar in bars:
+    yval = bar.get_height()
+    if yval > threshold:  # Only label bars that exceed the threshold
+        plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), ha='center', va='bottom')
+
+plt.show()
+
+plt.figure(figsize=(10, 6))
+bars = plt.bar(event_type_counts.index, event_type_counts.values, color='salmon')
+plt.title("Event Type Distribution")
+plt.xlabel("Event Type")
+plt.ylabel("Count")
+plt.xticks(rotation=45)
+
+# Adding data labels only for spikes
+for bar in bars:
+    yval = bar.get_height()
+    if yval > threshold:  # Only label bars that exceed the threshold
+        plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), ha='center', va='bottom')
+
+plt.show()
+
+# Group by Business Line for event count and total net loss
+business_line_aggregation = df.groupby('Business Line').agg(
+    event_count=('Unique Event ID', 'count'),       # Counting unique events per Business Line
+    total_net_loss=('Net Loss Amount', 'sum') # Summing up the Net Loss Amount per Business Line
+).reset_index()
+
+print(business_line_aggregation)
+          Business Line  event_count  total_net_loss
+0      Asset Management         1014   144885.729723
+1     Corporate Banking          991    30009.379412
+2  Credit Card Services          991  -125439.371998
+3    Financial Advisory          949   197304.982801
+4             Insurance          940  -182615.791024
+5    Investment Banking         1006  -326436.302115
+6      Mortgage Lending         1005    73776.209418
+7       Private Banking         1047   -88412.486556
+8                Retail         1055  -451097.634229
+9     Wealth Management         1002   158676.842855
+plt.figure(figsize=(10, 6))
+bars = plt.bar(business_line_aggregation['Business Line'], business_line_aggregation['event_count'], color='skyblue')
+plt.title("Event Count by Business Line")
+plt.xlabel("Business Line")
+plt.ylabel("Event Count")
+plt.xticks(rotation=45)
+
+# Adding data labels
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width() / 2, yval, int(yval), ha='center', va='bottom')
+
+plt.show()
+
+plt.figure(figsize=(10, 6))
+bars = plt.bar(business_line_aggregation['Business Line'], business_line_aggregation['total_net_loss'], color='salmon')
+plt.title("Total Net Loss by Business Line")
+plt.xlabel("Business Line")
+plt.ylabel("Total Net Loss")
+plt.xticks(rotation=45)
+
+# Adding data labels
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width() / 2, yval, f"${yval:,.0f}", ha='center', va='bottom')
+
+plt.show()
+
+# Ensure Date is in datetime format
+df['Date'] = pd.to_datetime(df['Date'])
+
+# Extract Year-Month for monthly aggregation (optional)
+df['Year-Month'] = df['Date'].dt.to_period('M')
+
+
+# Aggregate by Year-Month for event count and total net loss
+monthly_aggregation = df.groupby('Year-Month').agg(
+    event_count=('Unique Event ID', 'count'),
+    total_net_loss=('Net Loss Amount', 'sum')
+).reset_index()
+
+# Convert 'Year-Month' back to datetime for plotting
+monthly_aggregation['Year-Month'] = monthly_aggregation['Year-Month'].dt.to_timestamp()
+
+print(monthly_aggregation)
+   Year-Month  event_count  total_net_loss
+0  2020-11-01          208   -82513.098204
+1  2020-12-01          207   -74809.554655
+2  2021-01-01          197     6063.627758
+3  2021-02-01          195   150094.894053
+4  2021-03-01          204   133448.183021
+5  2021-04-01          229  -148363.557205
+6  2021-05-01          218     6970.174521
+7  2021-06-01          257   -80329.283510
+8  2021-07-01          200  -166985.767723
+9  2021-08-01          195   -34244.329435
+10 2021-09-01          226   -23017.808497
+11 2021-10-01          212   -95488.282270
+12 2021-11-01          223    52328.740284
+13 2021-12-01          191    -6796.373273
+14 2022-01-01          201    94814.900526
+15 2022-02-01          200  -150028.814293
+16 2022-03-01          244   -21693.221690
+17 2022-04-01          197   -11818.582461
+18 2022-05-01          209   -36383.499049
+19 2022-06-01          199   -94762.541051
+20 2022-07-01          206     3278.990037
+21 2022-08-01          208    25974.141582
+22 2022-09-01          203   -56958.938937
+23 2022-10-01          215  -133213.401371
+24 2022-11-01          219    -9085.558334
+25 2022-12-01          234    26113.989194
+26 2023-01-01          177   -52625.697104
+27 2023-02-01          175  -103398.648737
+28 2023-03-01          212    34315.013628
+29 2023-04-01          208   -61551.097484
+30 2023-05-01          205    32149.391166
+31 2023-06-01          207    42686.309541
+32 2023-07-01          188   117360.389031
+33 2023-08-01          220    67715.239357
+34 2023-09-01          188    13641.498414
+35 2023-10-01          211    13977.145325
+36 2023-11-01          241    29280.186399
+37 2023-12-01          221   -71131.224275
+38 2024-01-01          223   -58041.073281
+39 2024-02-01          189    20959.604317
+40 2024-03-01          201    -1871.675316
+41 2024-04-01          198    13606.864815
+42 2024-05-01          193    44041.978482
+43 2024-06-01          208    81590.488531
+44 2024-07-01          204    56878.219107
+45 2024-08-01          242   -96481.970728
+46 2024-09-01          185   -28821.428280
+47 2024-10-01          202    64051.196722
+48 2024-11-01            5     -274.180361
+plt.figure(figsize=(12, 6))
+plt.plot(monthly_aggregation['Year-Month'], monthly_aggregation['event_count'], marker='o', color='skyblue', label="Event Count")
+plt.title("Monthly Event Count Over Time")
+plt.xlabel("Year-Month")
+plt.ylabel("Event Count")
+plt.xticks(rotation=45)
+plt.legend()
+
+# Adding data labels to some spikes
+threshold = 100  # Label only if count exceeds 100
+for i, value in enumerate(monthly_aggregation['event_count']):
+    if value > threshold:
+        plt.text(monthly_aggregation['Year-Month'][i], value, f"{value}", ha='center', va='bottom')
+
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.plot(monthly_aggregation['Year-Month'], monthly_aggregation['total_net_loss'], marker='o', color='salmon', label="Total Net Loss")
+plt.title("Monthly Total Net Loss Over Time")
+plt.xlabel("Year-Month")
+plt.ylabel("Total Net Loss")
+plt.xticks(rotation=45)
+plt.legend()
+
+# Adding data labels to some spikes
+for i, value in enumerate(monthly_aggregation['total_net_loss']):
+    if value > 100000:  # Label only if net loss exceeds a threshold
+        plt.text(monthly_aggregation['Year-Month'][i], value, f"${value:,.0f}", ha='center', va='bottom')
+
+plt.show()
+
+# Define a threshold for labeling (e.g., label only spikes where event count > 100)
+threshold_event_count = 100
+
+plt.figure(figsize=(12, 6))
+plt.plot(monthly_aggregation['Year-Month'], monthly_aggregation['event_count'], marker='o', color='skyblue', label="Event Count")
+plt.title("Monthly Event Count Over Time")
+plt.xlabel("Year-Month")
+plt.ylabel("Event Count")
+plt.xticks(rotation=45)
+plt.legend()
+
+# Adding data labels only for high spikes (where event count > threshold)
+for i, value in enumerate(monthly_aggregation['event_count']):
+    if value > threshold_event_count:  # Only label points that exceed the threshold
+        plt.text(monthly_aggregation['Year-Month'][i], value, f"{value}", ha='center', va='bottom')
+
+plt.show()
+
+# Define a threshold for labeling (e.g., label only spikes where total net loss > 100,000)
+threshold_net_loss = 100000
+
+plt.figure(figsize=(12, 6))
+plt.plot(monthly_aggregation['Year-Month'], monthly_aggregation['total_net_loss'], marker='o', color='salmon', label="Total Net Loss")
+plt.title("Monthly Total Net Loss Over Time")
+plt.xlabel("Year-Month")
+plt.ylabel("Total Net Loss")
+plt.xticks(rotation=45)
+plt.legend()
+
+# Adding data labels only for high spikes (where total net loss > threshold)
+for i, value in enumerate(monthly_aggregation['total_net_loss']):
+    if value > threshold_net_loss:  # Only label points that exceed the threshold
+        plt.text(monthly_aggregation['Year-Month'][i], value, f"${value:,.0f}", ha='center', va='bottom')
+
+plt.show()
+
+import numpy as np
+
+# Group by Business Line and Event Type, calculate the log-normal parameters
+def calculate_var(group, confidence_level=0.95):
+    # Calculate log-transformed net loss
+    log_net_loss = np.log(group['Net Loss Amount'])
+    
+    # Calculate the mean and standard deviation of the log-transformed values
+    mu = log_net_loss.mean()
+    sigma = log_net_loss.std()
+    
+    # Calculate the Z-value corresponding to the confidence level
+    Z_alpha = np.percentile(log_net_loss, (1 - confidence_level) * 100)
+    
+    # Calculate VaR (value at risk)
+    var = np.exp(mu + sigma * Z_alpha)  # Back-transform the VaR to the original scale
+    return var
+
+# Apply VaR calculation to each Business Line and Event Type
+var_by_business_line = df.groupby('Business Line').apply(calculate_var)
+var_by_event_type = df.groupby('Event Type').apply(calculate_var)
+
+# Display the results
+print("VaR by Business Line:")
+print(var_by_business_line)
+print("\nVaR by Event Type:"
