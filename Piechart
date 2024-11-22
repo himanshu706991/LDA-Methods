@@ -1,3 +1,195 @@
+import matplotlib.pyplot as plt
+
+# Sample data for distribution
+categories = ['Category A', 'Category B', 'Category C', 'Category D']
+values = [30, 20, 25, 25]  # Percentages
+
+# Define colors and explode for better visualization
+colors = ['skyblue', 'lightgreen', 'coral', 'gold']
+explode = [0.05, 0.05, 0.05, 0.05]  # Slightly explode all slices
+
+# Create pie chart
+plt.figure(figsize=(8, 8))
+wedges, texts, autotexts = plt.pie(
+    values, 
+    labels=categories, 
+    autopct='%1.1f%%',  # Format for percentage
+    startangle=90, 
+    colors=colors, 
+    explode=explode, 
+    pctdistance=0.8  # Position percentages closer to slices
+)
+
+# Customize label and percentage text size
+for text in texts:  # Category labels
+    text.set_fontsize(12)
+for autotext in autotexts:  # Percentages
+    autotext.set_fontsize(14)
+    autotext.set_color('black')  # Make percentages visible
+
+# Add a title for clarity
+plt.title('Percentage Distribution by Category', fontsize=16)
+
+# Display the chart
+plt.show()
+Key Customizations:
+Font Size:
+
+Increased the font size of category labels (texts) to 12.
+Increased the font size of percentages (autotexts) to 14.
+Spacing:
+
+Added slight explosion for all slices using explode.
+Adjusted pctdistance to position percentages closer to the slices for better visibility.
+Colors:
+
+Added distinct colors for each category to improve visual differentiation.
+Chart Size:
+
+Adjusted the figure size to ensure labels and percentages are clearly visible.
+Output:
+This pie chart will have:
+
+Well-visible labels and percentages.
+Better spacing between slices.
+A clear and professional layout for presentation.
+
+
+
+
+
+You said:
+In pic chart percentage distribution value want to show in label aslo in pandas matplot
+ChatGPT said:
+ChatGPT
+If you want to show both the percentage distribution and values in the labels of a pie chart using Pandas and Matplotlib, you can format the labels accordingly. Here's how you can do it:
+
+Code Example:
+python
+Copy code
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Sample data in a Pandas DataFrame
+data = {'Category': ['Category A', 'Category B', 'Category C', 'Category D'],
+        'Values': [300, 200, 250, 250]}
+
+df = pd.DataFrame(data)
+
+# Calculate percentages
+df['Percentage'] = (df['Values'] / df['Values'].sum()) * 100
+
+# Format labels to include both values and percentages
+labels = [f"{category} ({value}, {percentage:.1f}%)" 
+          for category, value, percentage in zip(df['Category'], df['Values'], df['Percentage'])]
+
+# Create pie chart
+plt.figure(figsize=(8, 8))
+plt.pie(
+    df['Values'],
+    labels=labels,
+    autopct=None,  # Disable autopct as we're including it in labels
+    startangle=90,
+    colors=['skyblue', 'lightgreen', 'coral', 'gold'],
+    explode=[0.05] * len(df)  # Slightly explode all slices
+)
+
+# Add title
+plt.title('Percentage and Value Distribution by Category', fontsize=16)
+
+# Display the chart
+plt.show()
+Explanation:
+Percentage Calculation:
+
+df['Percentage'] = (df['Values'] / df['Values'].sum()) * 100 computes the percentage for each category.
+Custom Labels:
+
+labels = [f"{category} ({value}, {percentage:.1f}%)" ...] creates custom labels that include both the value and the percentage for each category.
+Pie Chart Customization:
+
+explode=[0.05] * len(df) slightly separates the slices for better visibility.
+autopct=None disables the automatic percentage display as it's already included in the labels.
+Output:
+The pie chart will show:
+
+Labels that include both the values and percentages, e.g., "Category A (300, 30.0%)".
+A clean and professional layout with clear information.
+
+
+
+
+
+You said:
+In pi chart distribution value wants to show in pi chart label 
+ChatGPT said:
+ChatGPT
+If you want to display the distribution values directly on the pie chart labels, here's how you can achieve it using Matplotlib. This includes the category names, their values, and optionally the percentage:
+
+Code Example:
+python
+Copy code
+import matplotlib.pyplot as plt
+
+# Sample data
+categories = ['Category A', 'Category B', 'Category C', 'Category D']
+values = [300, 200, 250, 250]
+
+# Calculate percentages
+total = sum(values)
+percentages = [(value / total) * 100 for value in values]
+
+# Create labels that include category names, values, and percentages
+labels = [f"{category}\n{value} ({percentage:.1f}%)"
+          for category, value, percentage in zip(categories, values, percentages)]
+
+# Create pie chart
+plt.figure(figsize=(8, 8))
+plt.pie(
+    values,
+    labels=labels,  # Use custom labels
+    startangle=90,
+    colors=['skyblue', 'lightgreen', 'coral', 'gold'],
+    explode=[0.05] * len(categories),  # Slightly explode all slices
+    textprops={'fontsize': 12}  # Adjust font size for better readability
+)
+
+# Add a title
+plt.title('Category Distribution with Values and Percentages', fontsize=16)
+
+# Display the chart
+plt.show()
+Key Features:
+Labels:
+
+Each label includes:
+Category name (e.g., "Category A").
+Raw value (e.g., "300").
+Percentage (e.g., "30.0%").
+Example label: "Category A\n300 (30.0%)".
+Exploded Slices:
+
+The explode parameter slightly separates all slices for better clarity.
+Font Adjustments:
+
+textprops={'fontsize': 12} ensures the labels are readable.
+Color Customization:
+
+Different colors are assigned to each slice for better visualization.
+Output:
+A pie chart with category names, raw values, and percentages displayed directly on each slice label.
+A clean, professional layout suitable for presentations or analysis.
+
+
+
+
+
+
+
+
+
+ChatGPT can make mistakes. Check
+****
 To improve the visibility of labels and percentages in a pie chart, you can customize the label font size, increase spacing between slices, and add additional formatting. Below is an example code that addresses these issues:
 
 Code for Enhanced Pie Chart with Better Visibility:
