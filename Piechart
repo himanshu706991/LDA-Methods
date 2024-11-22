@@ -1,3 +1,71 @@
+To improve the visibility of labels and percentages in a pie chart, you can customize the label font size, increase spacing between slices, and add additional formatting. Below is an example code that addresses these issues:
+
+Code for Enhanced Pie Chart with Better Visibility:
+python
+Copy code
+import matplotlib.pyplot as plt
+
+# Sample data for distribution
+categories = ['Category A', 'Category B', 'Category C', 'Category D']
+values = [30, 20, 25, 25]  # Percentages
+
+# Define colors and explode for better visualization
+colors = ['skyblue', 'lightgreen', 'coral', 'gold']
+explode = [0.05, 0.05, 0.05, 0.05]  # Slightly explode all slices
+
+# Create pie chart
+plt.figure(figsize=(8, 8))
+wedges, texts, autotexts = plt.pie(
+    values, 
+    labels=categories, 
+    autopct='%1.1f%%',  # Format for percentage
+    startangle=90, 
+    colors=colors, 
+    explode=explode, 
+    pctdistance=0.8  # Position percentages closer to slices
+)
+
+# Customize label and percentage text size
+for text in texts:  # Category labels
+    text.set_fontsize(12)
+for autotext in autotexts:  # Percentages
+    autotext.set_fontsize(14)
+    autotext.set_color('black')  # Make percentages visible
+
+# Add a title for clarity
+plt.title('Percentage Distribution by Category', fontsize=16)
+
+# Display the chart
+plt.show()
+Key Customizations:
+Font Size:
+
+Increased the font size of category labels (texts) to 12.
+Increased the font size of percentages (autotexts) to 14.
+Spacing:
+
+Added slight explosion for all slices using explode.
+Adjusted pctdistance to position percentages closer to the slices for better visibility.
+Colors:
+
+Added distinct colors for each category to improve visual differentiation.
+Chart Size:
+
+Adjusted the figure size to ensure labels and percentages are clearly visible.
+Output:
+This pie chart will have:
+
+Well-visible labels and percentages.
+Better spacing between slices.
+A clear and professional layout for presentation.
+
+
+
+
+
+
+
+
 use this data import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
